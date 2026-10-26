@@ -1,6 +1,7 @@
 import contextlib
 import ctypes
 from ctypes import wintypes
+import io
 import json
 import os
 from pathlib import Path
@@ -8,10 +9,11 @@ import tempfile
 import subprocess
 import sys
 import unittest
+from unittest import mock
 
 from fontTools.fontBuilder import FontBuilder
 from fontTools.pens.ttGlyphPen import TTGlyphPen
-from font_ingest import Importer, StableInbox, fingerprint, identity, read_lease, single_writer, no_replace_rename
+from font_ingest import Importer, StableInbox, fingerprint, identity, main, read_lease, single_writer, no_replace_rename
 
 
 def make_font(path, family='Inbox Test', revision=1):
@@ -172,6 +174,19 @@ class IngestTests(unittest.TestCase):
         data=json.loads(re.search(r'const data=(.*?);const \$=',(self.root/'字体目录.html').read_text('utf-8'),re.S).group(1))
         self.assertEqual(len(data),1)
         self.worker.refresh();self.assertEqual(self.worker.db.execute('SELECT count(*) FROM files').fetchone()[0],1)
+
+    def test_configured_state_directory_is_used_directly(self):
+        config=Path(self.tmp.name)/'config.json'
+        config.write_text(json.dumps({'root':str(self.root)}),encoding='utf-8')
+        state=Path(self.tmp.name)/'existing-state';state.mkdir()
+        (state/'status.json').write_text('{"phase":"等待投递"}',encoding='utf-8')
+        output=io.StringIO()
+        with mock.patch.dict(os.environ,{'FONT_INGEST_STATE':str(state)}), \
+             mock.patch.object(sys,'argv',['font_ingest.py','status','--config',str(config)]), \
+             contextlib.redirect_stdout(output):
+            main()
+        self.assertEqual(json.loads(output.getvalue()),{'phase':'等待投递'})
+        self.assertFalse((state/'FontIngest').exists())
 
     def test_deleted_catalog_path_stays_deleted_until_file_returns(self):
         import re

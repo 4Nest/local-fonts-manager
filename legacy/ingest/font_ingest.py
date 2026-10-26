@@ -722,7 +722,8 @@ def main():
     parser.add_argument('--state',type=Path)
     args=parser.parse_args()
     config=json.loads(args.config.read_text('utf-8-sig'))
-    state=args.state or Path(os.environ.get('FONT_INGEST_STATE',os.environ.get('LOCALAPPDATA','/state')))/'FontIngest'/hashlib.sha256(config['root'].casefold().encode()).hexdigest()[:12]
+    configured_state=os.environ.get('FONT_INGEST_STATE')
+    state=args.state or (Path(configured_state) if configured_state else Path(os.environ.get('LOCALAPPDATA','/state'))/'FontIngest'/hashlib.sha256(config['root'].casefold().encode()).hexdigest()[:12])
     state.mkdir(parents=True,exist_ok=True)
     if args.command=='stop':
         (state/'stop.request').write_text(timestamp(),encoding='utf-8')
