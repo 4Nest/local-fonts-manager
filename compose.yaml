@@ -2,7 +2,7 @@ name: local-fonts-manager
 services:
   fonts-manager:
     build: .
-    image: ghcr.io/4nest/local-fonts-manager:latest
+    image: ghcr.io/4nest/local-fonts-manager-web:latest
     pull_policy: always
     container_name: local-fonts-manager
     restart: unless-stopped

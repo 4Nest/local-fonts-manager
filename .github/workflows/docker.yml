@@ -36,7 +36,7 @@ jobs:
           - service: fonts-manager
             context: .
             file: ./Dockerfile
-            image: ghcr.io/4nest/local-fonts-manager
+            image: ghcr.io/4nest/local-fonts-manager-web
           - service: font-ingest
             context: ./legacy/ingest
             file: ./legacy/ingest/Dockerfile
