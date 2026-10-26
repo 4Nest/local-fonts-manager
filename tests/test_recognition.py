@@ -141,6 +141,58 @@ def test_matching_checks_every_ttc_face_and_skips_missing_coverage(library):
         manager.close()
 
 
+def test_parallel_and_single_worker_keep_the_same_cross_batch_winner(tmp_path, monkeypatch):
+    library, source = shape_library(tmp_path)
+    monkeypatch.setattr(recognition, "COARSE_CHUNK_SIZE", 1)
+    monkeypatch.setattr(recognition, "REFINE_LIMIT", 1)
+    data = None
+
+    def match(workers):
+        manager = RecognitionManager(library, workers=workers)
+        try:
+            nonlocal data
+            data = data or rendered_png(manager, source, "AB")
+            created = manager.create(data, "AB")
+            return wait_job(manager, created["id"])
+        finally:
+            manager.close()
+
+    single = match(1)
+    parallel = match(2)
+    assert single["status"] == parallel["status"] == "completed"
+    assert single["processed"] == parallel["processed"] == 1  # Completed refine phase.
+    assert single["matched"] == parallel["matched"] == 2
+    assert len(parallel["results"]) == 1
+    assert parallel["results"] == single["results"]
+    assert parallel["results"][0]["family"] == "Shape Zero"
+
+
+def test_cancellation_with_pending_process_batches(tmp_path, monkeypatch):
+    library, source = shape_library(tmp_path)
+    monkeypatch.setattr(recognition, "COARSE_CHUNK_SIZE", 1)
+    manager = RecognitionManager(library, workers=2)
+    data = rendered_png(manager, source, "AB")
+    started = threading.Event()
+    release = threading.Event()
+    real_wait = recognition.wait
+
+    def blocked_wait(*args, **kwargs):
+        started.set()
+        release.wait(2)
+        return real_wait(*args, **kwargs)
+
+    monkeypatch.setattr(recognition, "wait", blocked_wait)
+    try:
+        created = manager.create(data, "AB")
+        assert started.wait(1)
+        manager.cancel(created["id"])
+        release.set()
+        assert wait_job(manager, created["id"])["status"] == "cancelled"
+    finally:
+        release.set()
+        manager.close()
+
+
 def test_job_cancellation_concurrency_and_ttl(library, monkeypatch):
     manager = RecognitionManager(library)
     source = library.path(library.search("测试中文")["items"][0]["id"])

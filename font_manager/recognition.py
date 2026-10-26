@@ -3,6 +3,7 @@
 import csv
 import io
 import logging
+import multiprocessing
 import os
 import shutil
 import struct
@@ -10,10 +11,12 @@ import subprocess
 import threading
 import time
 import uuid
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, ThreadPoolExecutor, wait
 from dataclasses import dataclass, field
 
 from PIL import Image, ImageChops, ImageDraw, ImageFont, ImageOps, ImageStat
+
+from .library import Library
 
 logger = logging.getLogger(__name__)
 IMAGE_FILE_LIMIT = 12 * 1024 * 1024
@@ -22,6 +25,10 @@ IMAGE_PIXEL_LIMIT = 24_000_000
 TEXT_LIMIT = 100
 RESULT_LIMIT = 12
 REFINE_LIMIT = 96
+COARSE_SIZE = 64
+COARSE_WORKERS = 2
+COARSE_CHUNK_SIZE = 32
+WORKER_TASK_LIMIT = 8
 JOB_TTL = 30 * 60
 JOB_TIMEOUT = 15 * 60
 OCR_LANGUAGES = {
@@ -246,26 +253,88 @@ def _normalized(mask, height):
     return resized.point(lambda value: 255 if value > 127 else 0)
 
 
-def _dice_at(source, candidate, dx=0, dy=0):
+def _normalized_similarity(source, candidate, refine=False):
+    candidate = _normalized(candidate, source.height)
     width = max(source.width, candidate.width) + 16
     height = max(source.height, candidate.height) + 16
     left = Image.new("L", (width, height))
-    right = Image.new("L", (width, height))
     left.paste(source, ((width - source.width) // 2, (height - source.height) // 2))
-    right.paste(candidate, ((width - candidate.width) // 2 + dx, (height - candidate.height) // 2 + dy))
     source_area = source.histogram()[255]
     candidate_area = candidate.histogram()[255]
     if not source_area or not candidate_area:
         return 0.0
-    intersection = ImageChops.darker(left, right).histogram()[255]
-    return 2 * intersection / (source_area + candidate_area)
+    offsets = range(-4, 5, 2) if refine else (0,)
+    best = 0.0
+    for dx in offsets:
+        for dy in offsets:
+            right = Image.new("L", (width, height))
+            right.paste(candidate, ((width - candidate.width) // 2 + dx, (height - candidate.height) // 2 + dy))
+            intersection = ImageChops.darker(left, right).histogram()[255]
+            best = max(best, 2 * intersection / (source_area + candidate_area))
+    return best
 
 
 def similarity(source, candidate, height=64, refine=False):
-    source = _normalized(source, height)
-    candidate = _normalized(candidate, height)
-    offsets = range(-4, 5, 2) if refine else (0,)
-    return max(_dice_at(source, candidate, dx, dy) for dx in offsets for dy in offsets)
+    return _normalized_similarity(_normalized(source, height), candidate, refine)
+
+
+def _face_count(path):
+    with path.open("rb") as stream:
+        header = stream.read(12)
+    if header[:4] == b"ttcf" and len(header) == 12:
+        return min(struct.unpack(">I", header[8:12])[0], 1000)
+    return 1
+
+
+def _face_mask(path, face, text, required, size):
+    with Library.open_font(path, face)[0] as font:
+        cmap = font.getBestCmap() or {}
+        if any(ord(character) not in cmap for character in required):
+            return None, None
+        names = font["name"]
+        style = names.getDebugName(17) or names.getDebugName(2) or ""
+        family = names.getDebugName(16) or names.getDebugName(1) or ""
+        raw = None
+        if path.suffix.lower() in {".woff", ".woff2"}:
+            font.flavor = None
+            raw = io.BytesIO()
+            font.save(raw)
+            raw.seek(0)
+            display = ImageFont.truetype(raw, size=size)
+        else:
+            display = None
+    if display is None:
+        display = ImageFont.truetype(str(path), size=size, index=face)
+    return _tight_text_mask(display, text, size), {"family": family, "style": style}
+
+
+def _coarse_chunk(batch, text, required, source):
+    result = {"processed": 0, "matched": 0, "skipped_missing": 0, "skipped_errors": 0, "coarse": []}
+    for order, candidate, path in batch:
+        try:
+            try:
+                face_count = _face_count(path)
+            except Exception:  # noqa: BLE001 - a bad file must not stop its batch
+                result["skipped_errors"] += 1
+                continue
+            for face in range(face_count):
+                try:
+                    mask, names = _face_mask(path, face, text, required, COARSE_SIZE)
+                except Exception as exc:  # noqa: BLE001 - skip broken third-party font data
+                    logger.debug("Skipping unreadable font %s face %s: %s", candidate["path"], face, exc)
+                    result["skipped_errors"] += 1
+                    continue
+                if mask is None:
+                    result["skipped_missing"] += 1
+                    continue
+                score = _normalized_similarity(source, mask)
+                result["coarse"].append((score, order, candidate, face, names))
+                result["matched"] += 1
+        finally:
+            result["processed"] += 1
+    result["coarse"].sort(key=lambda item: (-item[0], item[1]))
+    result["coarse"] = result["coarse"][:REFINE_LIMIT]
+    return result
 
 
 @dataclass
@@ -303,8 +372,9 @@ class RecognitionJob:
 
 
 class RecognitionManager:
-    def __init__(self, library):
+    def __init__(self, library, workers=COARSE_WORKERS):
         self.library = library
+        self.workers = max(1, workers)
         self.jobs = {}
         self.lock = threading.Lock()
         self.ocr_lock = threading.Lock()
@@ -381,33 +451,66 @@ class RecognitionManager:
             raise ValueError("全库识别超时，请减少文字或稍后重试")
 
     def _face_mask(self, path, face, text, required, size):
-        with self.library.open_font(path, face)[0] as font:
-            cmap = font.getBestCmap() or {}
-            if any(ord(character) not in cmap for character in required):
-                return None, None
-            names = font["name"]
-            style = names.getDebugName(17) or names.getDebugName(2) or ""
-            family = names.getDebugName(16) or names.getDebugName(1) or ""
-            raw = None
-            if path.suffix.lower() in {".woff", ".woff2"}:
-                font.flavor = None
-                raw = io.BytesIO()
-                font.save(raw)
-                raw.seek(0)
-                display = ImageFont.truetype(raw, size=size)
-            else:
-                display = None
-        if display is None:
-            display = ImageFont.truetype(str(path), size=size, index=face)
-        return _tight_text_mask(display, text, size), {"family": family, "style": style}
+        return _face_mask(path, face, text, required, size)
 
-    @staticmethod
-    def _face_count(path):
-        with path.open("rb") as stream:
-            header = stream.read(12)
-        if header[:4] == b"ttcf" and len(header) == 12:
-            return min(struct.unpack(">I", header[8:12])[0], 1000)
-        return 1
+    def _batches(self, job, candidates):
+        batch = []
+        for order, candidate in enumerate(candidates):
+            self._checkpoint(job)
+            try:
+                path = self.library.checked(candidate["path"])
+            except Exception:  # noqa: BLE001 - invalid indexed paths are isolated from the scan
+                with self.lock:
+                    job.processed += 1
+                    job.skipped_errors += 1
+                    job.updated = time.time()
+                continue
+            batch.append((order, candidate, path))
+            if len(batch) == COARSE_CHUNK_SIZE:
+                yield batch
+                batch = []
+        if batch:
+            yield batch
+
+    def _coarse(self, job, candidates, required):
+        source = _normalized(job.image, COARSE_SIZE)
+        context = multiprocessing.get_context("spawn")
+        pool = ProcessPoolExecutor(
+            max_workers=self.workers,
+            mp_context=context,
+            max_tasks_per_child=WORKER_TASK_LIMIT,
+        )
+        pending = set()
+        batches = iter(self._batches(job, candidates))
+        exhausted = False
+        coarse = []
+        try:
+            while pending or not exhausted:
+                self._checkpoint(job)
+                while not exhausted and len(pending) < self.workers * 2:
+                    try:
+                        batch = next(batches)
+                    except StopIteration:
+                        exhausted = True
+                        break
+                    pending.add(pool.submit(_coarse_chunk, batch, job.text, required, source))
+                if not pending:
+                    break
+                done, pending = wait(pending, return_when=FIRST_COMPLETED)
+                for future in done:
+                    result = future.result()
+                    coarse.extend(result.pop("coarse"))
+                    coarse.sort(key=lambda item: (-item[0], item[1]))
+                    del coarse[REFINE_LIMIT:]
+                    with self.lock:
+                        for key, value in result.items():
+                            setattr(job, key, getattr(job, key) + value)
+                        job.updated = time.time()
+            return coarse
+        finally:
+            for future in pending:
+                future.cancel()
+            pool.shutdown(wait=True, cancel_futures=True)
 
     def _run(self, job_id):
         with self.lock:
@@ -424,50 +527,19 @@ class RecognitionManager:
             required = {character for character in job.text if not character.isspace()}
             if not required:
                 raise ValueError("匹配文本至少需要一个非空白字符")
-            coarse = []
-            for candidate in candidates:
-                self._checkpoint(job)
-                try:
-                    try:
-                        path = self.library.checked(candidate["path"])
-                        face_count = self._face_count(path)
-                    except Exception:  # noqa: BLE001 - a bad face must not stop the library scan
-                        with self.lock:
-                            job.skipped_errors += 1
-                        continue
-                    for face in range(face_count):
-                        self._checkpoint(job)
-                        try:
-                            mask, names = self._face_mask(path, face, job.text, required, 96)
-                        except Exception as exc:  # noqa: BLE001 - skip broken third-party font data
-                            logger.debug("Skipping unreadable font %s face %s: %s", candidate["path"], face, exc)
-                            with self.lock:
-                                job.skipped_errors += 1
-                            continue
-                        if mask is None:
-                            with self.lock:
-                                job.skipped_missing += 1
-                            continue
-                        score = similarity(job.image, mask)
-                        coarse.append((score, candidate, face, names))
-                        with self.lock:
-                            job.matched += 1
-                finally:
-                    with self.lock:
-                        job.processed += 1
-                        job.updated = time.time()
-            coarse.sort(key=lambda item: item[0], reverse=True)
+            coarse = self._coarse(job, candidates, required)
             with self.lock:
                 job.phase = "精排"
                 job.processed = 0
                 job.total = min(REFINE_LIMIT, len(coarse))
             refined = []
-            for score, candidate, face, names in coarse[:REFINE_LIMIT]:
+            refine_source = _normalized(job.image, 160)
+            for score, order, candidate, face, names in coarse[:REFINE_LIMIT]:
                 self._checkpoint(job)
                 try:
                     path = self.library.checked(candidate["path"])
                     mask, _ = self._face_mask(path, face, job.text, required, 192)
-                    score = similarity(job.image, mask, height=160, refine=True)
+                    score = _normalized_similarity(refine_source, mask, refine=True)
                     refined.append(
                         {
                             "id": candidate["id"],
