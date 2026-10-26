@@ -14,6 +14,7 @@ import hashlib
 import html
 import json
 import logging
+from logging.handlers import RotatingFileHandler
 import os
 from pathlib import Path
 import re
@@ -671,10 +672,13 @@ class Importer:
                     if STOP_REQUESTED or self.stop_file.exists():break
                     self.status('正在入库',batch=batch,current=relative)
                     try:
-                        self.process_file(relative,expected,batch)
+                        record=self.process_file(relative,expected,batch)
+                        logging.info('File completed batch=%s action=%s source=%s target=%s',
+                            batch,record['action'],relative,record['target'])
                     except (OSError,ValueError) as exc:
                         errors.append({'source':relative,'error':str(exc)})
                         self.journal({'event':'deferred','batch':batch,'source':relative,'time':timestamp(),'error':str(exc)})
+                        logging.warning('File deferred batch=%s source=%s error=%s',batch,relative,exc)
                     # RuntimeError / interrupted move stops processing until
                     # recover() has reconciled the pending journal operation.
                 self.stable.observed.pop(key,None)
@@ -686,14 +690,17 @@ class Importer:
                         except OSError:pass  # Never remove a nonempty folder.
         finally:
             self.publish(batch)
+        logging.info('Batch published batch=%s counts=%s',batch,json.dumps(self.last_batch['counts'],ensure_ascii=False))
         self.status('等待投递' if not errors else '部分文件等待重试',deferred=errors)
         return batch
 
     def run(self, once=False):
         if self.stop_file.exists():self.stop_file.unlink()
+        logging.info('Worker starting root=%s',self.root)
         with single_writer(self.app/'worker.lock'):
             self.recover()
             self.refresh()
+            logging.info('Worker ready library_files=%s',self.db.execute('SELECT count(*) FROM files').fetchone()[0])
             self.publish_catalog()
             self.status('等待投递',stable_seconds=self.config['stable_seconds'])
             while not self.stop_file.exists() and not STOP_REQUESTED:
@@ -713,6 +720,7 @@ class Importer:
                     if once:raise
                     time.sleep(self.config['retry_seconds'])
             self.status('已停止')
+        logging.info('Worker stopped')
 
 
 def main():
@@ -731,7 +739,15 @@ def main():
     if args.command=='status':
         print((state/'status.json').read_text('utf-8') if (state/'status.json').exists() else '尚未启动')
         return
-    logging.basicConfig(filename=state/'worker.log',level=logging.INFO,encoding='utf-8',format='%(asctime)s %(levelname)s %(message)s')
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s %(levelname)s %(message)s',
+        handlers=[
+            RotatingFileHandler(state/'worker.log',maxBytes=5*1024*1024,backupCount=2,encoding='utf-8'),
+            logging.StreamHandler(),
+        ],
+        force=True,
+    )
     if os.name!='nt':signal.signal(signal.SIGTERM,stop_signal)
     worker=Importer(config,state)
     try:

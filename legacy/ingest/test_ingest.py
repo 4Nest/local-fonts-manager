@@ -164,9 +164,12 @@ class IngestTests(unittest.TestCase):
         self.assertEqual(self.worker.snapshot()[0],{})
         temporary.rename(pack/'readme.txt')
         snapshots,errors=self.worker.snapshot();self.assertFalse(errors)
-        self.worker.batch(list(snapshots.items()))
+        with self.assertLogs(level='INFO') as logs:
+            self.worker.batch(list(snapshots.items()))
         self.assertFalse(pack.exists());self.assertTrue((self.root/'自动入库记录.html').exists())
         self.assertTrue(list(self.worker.reports.glob('*.md')))
+        self.assertTrue(any('File completed' in line and 'action=入库' in line for line in logs.output))
+        self.assertTrue(any('Batch published' in line and '入库' in line for line in logs.output))
         page=(self.root/'字体目录.html').read_text('utf-8')
         self.assertIn('Inbox Test',page)
         self.worker.publish_catalog()

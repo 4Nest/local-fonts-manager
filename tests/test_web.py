@@ -1,4 +1,5 @@
 import asyncio
+import json
 
 import httpx
 import pytest
@@ -303,3 +304,27 @@ def test_http_preview_headers_and_export(library):
         assert backup["annotations"][0]["path"] == font["path"]
         assert client.get("/api/fonts", params={"limit": 201}).status_code == 422
         assert client.post("/api/refresh", json={"source": "invalid"}).status_code == 400
+
+
+def test_ingest_activity_routes(library):
+    reports = library.root / "_自动入库" / "入库记录"
+    reports.mkdir(parents=True)
+    (reports / "20261026_182534_batch.jsonl").write_text(
+        json.dumps({
+            "id": "one", "batch": "batch", "time": "2026-10-26T18:25:36+08:00",
+            "source": "待入库/one.ttf", "target": "完整包/测试/one.ttf",
+            "action": "入库", "reason": "新内容", "event": "completed",
+        }) + "\n",
+        encoding="utf-8",
+    )
+    (library.root / "自动入库记录.html").write_text("<h1>自动入库记录</h1>", encoding="utf-8")
+    with TestClient(create_app(library.settings)) as client:
+        response = client.get("/api/ingest/recent", params={"limit": 1})
+        assert response.status_code == 200
+        assert response.json()["items"][0]["id"] == "one"
+        assert client.get("/api/ingest/recent", params={"limit": 201}).status_code == 422
+        assert client.get("/api/ingest/logs").json()["available"] is False
+        assert client.get("/api/ingest/logs", params={"lines": 501}).status_code == 422
+        report = client.get("/ingest/report")
+        assert report.status_code == 200
+        assert report.text == "<h1>自动入库记录</h1>"

@@ -44,7 +44,7 @@ WebUI 按文件逐个上传，先写入 `_管理器上传暂存/`，单个文件
 
 ## 查看进度与记录
 
-- WebUI：`http://NAS的IP:8765`，查看入库状态并整理字体；新入库完成后，可点击“刷新目录”更新管理器索引。
+- WebUI：`http://NAS的IP:8765`，查看入库状态并整理字体；新批次完成后会自动更新管理器索引，也可点击“刷新目录”手动同步。“入库记录”显示最近处理结果，“运行日志”显示 worker 最近日志。
 - [自动入库记录](../自动入库记录.html)：最近 2,000 个处理结果，可搜索并打开对应文件。
 - [运行状态](运行状态.json)：当前阶段、最后更新时间、库内数量和最近批次。正常空闲阶段是“等待投递”。
 - [完整批次记录](入库记录/)：每批 Markdown 汇总和 JSONL 详细记录，包括 SHA-256、分类、移动路径和等待重试原因。
@@ -81,7 +81,7 @@ sudo docker compose exec -T font-ingest python /app/font_ingest.py status --conf
 
 `/vol3/docker/local-fonts-manager/ingest-state/`
 
-其中 `index.sqlite3` 保存索引和中断恢复日志，`worker.log` 记录异常，`status.json` 保存状态快照。共享目录中的 JSONL 同时保留每次移动前后的记录。意外重启时，程序会核对未完成操作及 SHA-256 后恢复。
+其中 `index.sqlite3` 保存索引和中断恢复日志，轮转写入的 `worker.log` 记录正常处理、重试和异常并同步输出到 Docker logs，`status.json` 保存状态快照。共享目录中的 JSONL 同时保留每次移动前后的记录。意外重启时，程序会核对未完成操作及 SHA-256 后恢复。
 
 worker 在共享目录 `_自动入库/worker.lock` 上持有操作系统文件锁，防止同一字库同时运行多个入库进程。锁文件存在本身不表示 worker 正在运行；不要通过删除锁文件来绕过锁，也不要同时运行新旧服务。切换时必须先停止当前 worker，迁移完整状态，再启动另一个 worker。
 

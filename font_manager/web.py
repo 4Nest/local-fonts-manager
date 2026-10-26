@@ -351,6 +351,21 @@ def create_app(settings=None):
     def inbox():
         return library.inbox_status()
 
+    @app.get("/api/ingest/recent")
+    def recent_ingest(limit: int = Query(50, ge=1, le=200)):
+        return {"items": library.recent_ingest(limit)}
+
+    @app.get("/api/ingest/logs")
+    def ingest_logs(lines: int = Query(200, ge=1, le=500)):
+        return library.ingest_log(lines)
+
+    @app.get("/ingest/report")
+    def ingest_report():
+        path = library.root / "自动入库记录.html"
+        if not path.is_file():
+            raise KeyError("入库报告尚未生成")
+        return FileResponse(path, media_type="text/html; charset=utf-8")
+
     @app.post("/api/inbox/upload", status_code=201)
     async def upload(request: Request):
         async with bounded_upload(request, upload_lock) as form:

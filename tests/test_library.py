@@ -130,3 +130,61 @@ def test_delete_font_rejects_unmanaged_paths(library):
     with pytest.raises(ValueError, match="完整包"):
         library.delete_font(row[0])
     assert path.read_bytes() == b"not empty"
+
+
+def test_recent_ingest_deduplicates_planned_and_preserves_failures(library):
+    reports = library.root / "_自动入库" / "入库记录"
+    reports.mkdir(parents=True)
+
+    def record(name, event, batch, **extra):
+        return json.dumps({
+            "id": name,
+            "batch": batch,
+            "time": f"2026-10-26T18:25:3{len(name)}+08:00",
+            "source": f"待入库/{name}.ttf",
+            "target": f"完整包/测试/{name}.ttf",
+            "action": "入库",
+            "reason": "新内容",
+            "event": event,
+            **extra,
+        }, ensure_ascii=False)
+
+    (reports / "20261026_180000_old.jsonl").write_text(
+        record("old", "completed", "old") + "\n", encoding="utf-8"
+    )
+    (reports / "20261026_182534_new.jsonl").write_text(
+        "\n".join([
+            record("first", "planned", "new"),
+            record("first", "completed", "new", completed_at="2026-10-26T18:25:40+08:00"),
+            record("second", "completed", "new"),
+            record("broken", "deferred", "new", error="文件仍在写入"),
+        ]) + "\n",
+        encoding="utf-8",
+    )
+
+    items = library.recent_ingest(3)
+    assert [item["id"] for item in items] == ["broken", "second", "first"]
+    assert items[0]["action"] == "等待重试"
+    assert items[0]["reason"] == "文件仍在写入"
+    assert items[-1]["completed_at"] == "2026-10-26T18:25:40+08:00"
+    assert [item["id"] for item in library.recent_ingest(10)] == [
+        "broken", "second", "first", "old"
+    ]
+    with pytest.raises(ValueError, match="1–200"):
+        library.recent_ingest(201)
+
+
+def test_ingest_log_tail_and_unmounted_state(library, tmp_path):
+    assert library.ingest_log()["available"] is False
+    state = tmp_path / "ingest-state"
+    state.mkdir()
+    (state / "worker.log").write_text("第一行\n第二行\n第三行\n", encoding="utf-8")
+    library.settings.ingest_state = state
+    result = library.ingest_log(2)
+    assert result["available"] is True
+    assert result["items"] == ["第二行", "第三行"]
+    assert result["updated_at"] > 0
+    (state / "worker.log").unlink()
+    assert library.ingest_log()["message"] == "日志尚未生成"
+    with pytest.raises(ValueError, match="1–500"):
+        library.ingest_log(501)

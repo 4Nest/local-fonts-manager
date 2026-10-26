@@ -1140,6 +1140,69 @@ pre {
   color: var(--muted);
   margin-bottom: 0;
 }
+.ingest-records-heading,
+.ingest-log-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 18px 0 12px;
+}
+.ingest-records-heading h3 {
+  margin: 0;
+  font-size: 14px;
+}
+.ingest-records {
+  max-height: 520px;
+  overflow-y: auto;
+  margin-bottom: 24px;
+  border-top: 1px solid var(--border);
+}
+.ingest-record {
+  padding: 15px 2px;
+  border-bottom: 1px solid var(--border);
+}
+.ingest-record-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.ingest-record-heading strong {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.ingest-record p {
+  margin: 5px 0;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.ingest-record small,
+.ingest-record-source,
+.ingest-record-reason {
+  color: var(--muted);
+}
+.ingest-deferred {
+  color: #a33;
+}
+.ingest-log-toolbar {
+  margin-top: 0;
+}
+.ingest-log {
+  box-sizing: border-box;
+  width: 100%;
+  max-height: 60vh;
+  overflow: auto;
+  margin: 0;
+  padding: 18px;
+  border-radius: 8px;
+  background: #161b26;
+  color: #e3e9f5;
+  font: 11px/1.7 ui-monospace, SFMono-Regular, Consolas, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
 .pending-list {
   font-size: 12px;
   line-height: 2.1;

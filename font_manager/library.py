@@ -11,6 +11,7 @@ import sqlite3
 import struct
 import threading
 import time
+from collections import deque
 from contextlib import contextmanager
 from pathlib import Path, PurePosixPath
 
@@ -483,6 +484,61 @@ class Library:
         except OSError:
             pending = []
         return {"worker": worker, "pending": pending, "inbox": str(inbox)}
+
+    def recent_ingest(self, limit=50):
+        if not 1 <= limit <= 200:
+            raise ValueError("最近入库记录数量须为 1–200")
+        reports = self.root / "_自动入库" / "入库记录"
+        items = []
+        try:
+            paths = sorted(reports.glob("*.jsonl"), key=lambda path: path.name, reverse=True)
+        except OSError:
+            return items
+        for path in paths:
+            recent = deque(maxlen=limit)
+            try:
+                with path.open(encoding="utf-8-sig") as stream:
+                    for line in stream:
+                        try:
+                            record = json.loads(line)
+                        except ValueError:
+                            continue
+                        event = record.get("event")
+                        if event not in {"completed", "deferred"}:
+                            continue
+                        item = {
+                            key: record.get(key)
+                            for key in ("id", "batch", "time", "completed_at", "source", "target", "action", "reason")
+                        }
+                        item["event"] = event
+                        if event == "deferred":
+                            item["action"] = "等待重试"
+                            item["reason"] = record.get("error") or "等待重试"
+                        recent.append(item)
+            except OSError:
+                continue
+            items.extend(reversed(recent))
+            if len(items) >= limit:
+                break
+        return items[:limit]
+
+    def ingest_log(self, lines=200):
+        if not 1 <= lines <= 500:
+            raise ValueError("日志行数须为 1–500")
+        if self.settings.ingest_state is None:
+            return {"available": False, "message": "未挂载入库状态目录", "items": [], "updated_at": None}
+        path = self.settings.ingest_state / "worker.log"
+        try:
+            with path.open("rb") as stream:
+                stream.seek(0, os.SEEK_END)
+                size = stream.tell()
+                stream.seek(max(0, size - 1024 * 1024))
+                content = stream.read().decode("utf-8", "replace")
+            updated_at = path.stat().st_mtime
+        except FileNotFoundError:
+            return {"available": True, "message": "日志尚未生成", "items": [], "updated_at": None}
+        items = content.splitlines()[-lines:]
+        return {"available": True, "message": "", "items": items, "updated_at": updated_at}
 
     @staticmethod
     def open_font(path, face=0):

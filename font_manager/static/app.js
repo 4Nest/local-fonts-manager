@@ -34,9 +34,15 @@ const state = {
 };
 let searchAbort,
   pollTimer,
+  inboxPollTimer,
+  ingestLogTimer,
   toastTimer,
   lastFocus,
   detailRequest = 0;
+let observedInboxBatch = null,
+  inboxSyncing = false,
+  inboxSyncFailed = false,
+  ingestLogLoading = false;
 const previewCache = new Map();
 let previewQueue = [],
   previewActive = 0;
@@ -429,6 +435,7 @@ function showModal(title, html, wide = false) {
   if (!$("#modal").open) $("#modal").showModal();
 }
 function closeModal() {
+  stopIngestLogPolling();
   $("#modal").close();
   lastFocus?.focus();
 }
@@ -613,13 +620,62 @@ async function compareFonts() {
   observePreviews($("#modal-content"));
 }
 async function showInbox() {
-  showModal("入库动态", '<div class="loading-state">正在读取 NAS 状态…</div>');
-  const result = await api("/api/inbox"),
-    worker = result.worker;
+  showModal("入库记录", '<div class="loading-state">正在读取 NAS 状态与最近记录…</div>', true);
+  const [result, recent] = await Promise.all([
+    api("/api/inbox"),
+    api("/api/ingest/recent?limit=50"),
+  ]);
+  const worker = result.worker;
   const updated = worker.updated_at ? Date.parse(worker.updated_at) : NaN;
   const stale = !Number.isFinite(updated) || Date.now() - updated > 180000;
+  const records = recent.items.length
+    ? recent.items.map((item) => {
+        const source = item.source || "未知来源";
+        const target = item.target || "尚未移动";
+        const name = target.split("/").pop() || source.split("/").pop();
+        const when = item.completed_at || item.time;
+        return `<article class="ingest-record"><div class="ingest-record-heading"><strong>${escapeHTML(name)}</strong><span class="badge ${item.event === "deferred" ? "ingest-deferred" : ""}">${escapeHTML(item.action)}</span></div><p title="${escapeHTML(target)}">${escapeHTML(target)}</p><small>${escapeHTML(date(when))} · ${escapeHTML(item.batch)}</small><p class="ingest-record-source">来源：${escapeHTML(source)}</p><p class="ingest-record-reason">${escapeHTML(item.reason || "")}</p></article>`;
+      }).join("")
+    : '<p class="small-note">还没有已完成的入库记录。</p>';
   $("#modal-content").innerHTML =
-    `<div class="inbox-summary"><strong>${escapeHTML(worker.phase)}</strong><p>最后更新：${date(worker.updated_at)}${stale ? " · 状态较旧，请检查入库容器是否运行" : ""}</p><p>入库服务索引：${worker.library_files === undefined ? "未知" : number(worker.library_files) + " 个文件"}</p></div><h3 class="field-label">待入库项目 · ${result.pending.length}</h3>${result.pending.length ? `<ul class="pending-list">${result.pending.map((item) => `<li>${escapeHTML(item.name)}${item.directory ? " /" : ""}</li>`).join("")}</ul>` : '<p class="small-note">当前没有待入库项目。</p>'}<p class="small-note">新字体复制稳定后，由现有 NAS 自动入库服务检查、去重和分类。完成后点击“刷新目录”同步到字库。</p><div class="detail-path">${escapeHTML(result.inbox)}</div>`;
+    `<div class="inbox-summary"><strong>${escapeHTML(worker.phase)}</strong><p>最后更新：${date(worker.updated_at)}${stale ? " · 状态较旧，请检查入库容器是否运行" : ""}</p><p>入库服务索引：${worker.library_files === undefined ? "未知" : number(worker.library_files) + " 个文件"} · WebUI 索引：${number(state.status.total)} 个文件</p></div><div class="ingest-records-heading"><h3>最近入库 · ${recent.items.length} 条</h3><a class="button" href="/ingest/report" target="_blank" rel="noopener">完整报告</a></div><div class="ingest-records">${records}</div><h3 class="field-label">待入库项目 · ${result.pending.length}</h3>${result.pending.length ? `<ul class="pending-list">${result.pending.map((item) => `<li>${escapeHTML(item.name)}${item.directory ? " /" : ""}</li>`).join("")}</ul>` : '<p class="small-note">当前没有待入库项目。</p>'}<p class="small-note">新文件复制稳定后会自动检查、去重和分类；批次完成后，网页会自动刷新字体索引。</p><div class="detail-path">${escapeHTML(result.inbox)}</div>`;
+}
+
+function stopIngestLogPolling() {
+  clearTimeout(ingestLogTimer);
+  ingestLogTimer = null;
+}
+
+async function refreshIngestLogs() {
+  if (ingestLogLoading || !$("#ingest-log-content")) return;
+  ingestLogLoading = true;
+  stopIngestLogPolling();
+  try {
+    const result = await api("/api/ingest/logs?lines=300");
+    if (!$("#ingest-log-content")) return;
+    $("#ingest-log-content").textContent = result.items.length
+      ? result.items.join("\n")
+      : result.message || "当前还没有日志。";
+    $("#ingest-log-updated").textContent = result.updated_at
+      ? `日志更新于 ${date(result.updated_at * 1000)}`
+      : result.message;
+  } catch (error) {
+    if ($("#ingest-log-content")) $("#ingest-log-content").textContent = error.message;
+  } finally {
+    ingestLogLoading = false;
+    if ($("#modal").open && $("#ingest-log-content"))
+      ingestLogTimer = setTimeout(refreshIngestLogs, 5000);
+  }
+}
+
+function showIngestLogs() {
+  showModal(
+    "入库运行日志",
+    '<div class="ingest-log-toolbar"><span id="ingest-log-updated" class="small-note">正在读取…</span><button id="ingest-log-refresh" class="button" type="button">刷新</button></div><pre id="ingest-log-content" class="ingest-log" aria-live="polite">正在读取日志…</pre><p class="small-note">显示最近 300 行；弹窗打开时每 5 秒更新。文件日志保留在入库状态目录，Docker 日志也会输出相同内容。</p>',
+    true,
+  );
+  $("#ingest-log-refresh").onclick = refreshIngestLogs;
+  void refreshIngestLogs();
 }
 const uploadLabels = {
   pending: "等待投递",
@@ -1129,6 +1185,8 @@ bind("#manage-collection", "click", () => {
   });
 });
 bind("#inbox-button", "click", showInbox);
+bind("#ingest-logs-button", "click", showIngestLogs);
+$("#modal").addEventListener("close", stopIngestLogPolling);
 bind("#upload-button", "click", showUpload);
 bind("#recognition-button", "click", () =>
   FontRecognition.show({
@@ -1253,11 +1311,51 @@ function beginPolling() {
     }
   }, 1800);
 }
+function scheduleInboxPolling() {
+  clearTimeout(inboxPollTimer);
+  inboxPollTimer = setTimeout(syncInboxIndex, 15000);
+}
+
+async function syncInboxIndex() {
+  clearTimeout(inboxPollTimer);
+  if (inboxSyncing) return;
+  inboxSyncing = true;
+  try {
+    const result = await api("/api/inbox");
+    const worker = result.worker || {};
+    const batch = worker.last_batch?.batch || null;
+    const previousBatch = observedInboxBatch;
+    observedInboxBatch = batch;
+    const idle = ["等待投递", "部分文件等待重试"].includes(worker.phase);
+    const countChanged =
+      Number.isFinite(worker.library_files) && worker.library_files !== state.status.total;
+    if (
+      idle &&
+      !state.status.indexing &&
+      ((previousBatch && batch !== previousBatch) || countChanged)
+    ) {
+      await post("/api/refresh", { source: "catalog" });
+      toast("检测到新入库记录，正在同步字体目录");
+      await loadStatus();
+      beginPolling();
+    }
+    inboxSyncFailed = false;
+  } catch (error) {
+    console.warn("Unable to synchronize ingest index", error);
+    if (!inboxSyncFailed) toast("自动同步字体目录失败，请稍后点击“刷新目录”");
+    inboxSyncFailed = true;
+  } finally {
+    inboxSyncing = false;
+    scheduleInboxPolling();
+  }
+}
+
 async function initialize() {
   await loadStatus();
   await loadFonts();
   if (location.pathname === "/settings") await showSettings(false);
   if (state.status.indexing || !state.status.total) beginPolling();
+  void syncInboxIndex();
 }
 initialize().catch((error) => {
   $("#error-banner").hidden = false;

@@ -14,6 +14,7 @@ services:
       TZ: Asia/Shanghai
       FONT_MANAGER_ROOT: /fonts
       FONT_MANAGER_STATE: /state
+      FONT_MANAGER_INGEST_STATE: /ingest-state
       FONT_MANAGER_HOST: 0.0.0.0
       FONT_MANAGER_PORT: 8765
     ports:
@@ -21,6 +22,7 @@ services:
     volumes:
       - ${FONT_LIBRARY_PATH:-/path/to/Fonts}:/fonts
       - ${FONT_STATE_PATH:-/vol3/docker/local-fonts-manager/state}:/state
+      - ${FONT_INGEST_STATE_PATH:-/vol3/docker/local-fonts-manager/ingest-state}:/ingest-state:ro
     tmpfs:
       - /tmp:rw,nosuid,nodev,size=256m,mode=1777
     mem_limit: 1536m
