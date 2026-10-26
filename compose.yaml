@@ -49,6 +49,7 @@ services:
     volumes:
       - ${FONT_LIBRARY_PATH:-/path/to/Fonts}:/fonts
       - ${FONT_INGEST_STATE_PATH:-/vol3/docker/local-fonts-manager/ingest-state}:/state
+      - ./legacy/ingest/config.nas.json:/app/config.json:ro
     tmpfs:
       - /tmp:rw,nosuid,nodev,size=128m,mode=1777
     stop_grace_period: 2m

@@ -1,4 +1,4 @@
-# fnOS 字库管理与自动入库
+# NAS 字库管理与自动入库
 
 本说明部署到字体共享目录的 `_自动入库/使用说明.md`；下方文件链接以该位置为准。
 
@@ -50,11 +50,11 @@ WebUI 按文件逐个上传，先写入 `_管理器上传暂存/`，单个文件
 - [完整批次记录](入库记录/)：每批 Markdown 汇总和 JSONL 详细记录，包括 SHA-256、分类、移动路径和等待重试原因。
 - [字体目录](../字体目录.html)：原目录保留历史记录，新入库字体会追加进来。
 
-状态文件是快照。如果最后更新时间长时间没有刷新，请到 fnOS 的 Docker 页面检查 `local-fonts-manager-ingest` 是否运行。待入库文件一直未被处理时，先看是否还在复制、是否存在 `.part`／`.tmp` 等临时文件，以及状态中的警告。
+状态文件是快照。如果最后更新时间长时间没有刷新，请到 NAS 的 Docker 页面检查 `local-fonts-manager-ingest` 是否运行。待入库文件一直未被处理时，先看是否还在复制、是否存在 `.part`／`.tmp` 等临时文件，以及状态中的警告。
 
 ## 启停与维护
 
-在 fnOS 的 **Docker → 容器 → local-fonts-manager-ingest** 中启动、停止或重启自动入库。已启用自动运行，不需要在电脑上运行启动脚本。
+在 NAS 的 **Docker → 容器 → local-fonts-manager-ingest** 中启动、停止或重启自动入库。已启用自动运行，不需要在电脑上运行启动脚本。
 
 SSH 管理命令：
 
@@ -69,7 +69,7 @@ sudo docker compose logs --tail=100 font-ingest
 sudo docker compose exec -T font-ingest python /app/font_ingest.py status --config /app/config.json
 ```
 
-项目程序位于 `/vol3/docker/local-fonts-manager/app`，入库源代码与配置位于其中的 `legacy/ingest/`。`legacy/ingest/config.nas.json` 定义分类区路径、检查间隔和稳定等待时间。修改入库代码或配置后，在项目目录执行 `sudo docker compose up -d --build font-ingest` 重建 worker。原有依赖版本和入库行为保留；基础镜像来自 Docker Hub 的 Docker Official Images。
+项目程序位于 `/vol3/docker/local-fonts-manager/app`，入库源代码与配置位于其中的 `legacy/ingest/`。`legacy/ingest/config.nas.json` 定义分类区路径、检查间隔和稳定等待时间，并以只读方式挂载到容器。修改配置后，在项目目录执行 `sudo docker compose up -d --no-deps --force-recreate font-ingest` 使配置生效。日常更新使用 `sudo docker compose pull && sudo docker compose up -d` 获取已发布镜像。
 
 字体库通过 `.env` 中的 `FONT_LIBRARY_PATH` 挂载到容器内 `/fonts`。默认运行账户为 `1000:1001`，请按字体库所属用户调整。入库容器只挂载字体目录和自己的状态目录，没有开放网络端口；WebUI / MCP 由独立管理器容器提供，使用 8765 端口。
 

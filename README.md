@@ -30,7 +30,7 @@
 镜像由 GitHub Actions 自动测试并发布，支持 **linux/amd64** 与 **linux/arm64**，NAS 无需编译。
 
 > [!IMPORTANT]
-> 部署前请确认没有其他入库 worker 指向同一字库。路径迁移、状态备份与升级步骤见 [fnOS 部署说明](docs/fnos-deployment.md)。
+> 部署前请确认没有其他入库 worker 指向同一字库，并分别持久化 WebUI 与自动入库的状态目录。
 
 ```bash
 git clone https://github.com/4Nest/local-fonts-manager.git
@@ -38,7 +38,7 @@ cd local-fonts-manager
 cp deploy.env.example .env
 
 # 编辑 .env，设置真实字体目录、状态目录和运行账户。
-# 按部署说明同步修改 legacy/ingest/config.nas.json 中的展示路径。
+# 按需修改 legacy/ingest/config.nas.json 中的展示路径。
 sudo mkdir -p /vol3/docker/local-fonts-manager/state
 sudo mkdir -p /vol3/docker/local-fonts-manager/ingest-state
 sudo chown 1000:1001 /vol3/docker/local-fonts-manager/{state,ingest-state}
@@ -79,7 +79,7 @@ sudo docker compose logs --tail=100 -f
 3. 后台渲染字库中的相同文字，进行初筛、对齐和精排。
 4. 查看 Top 12 同文预览与相似度，并跳转到字体详情。
 
-图片不会发送给第三方。清晰、单一字体的文字区域效果最好；复杂背景、描边阴影、透视、混排及可变字体非默认轴会降低准确度。相似度是启发式排序，不是确定性的字体鉴定。
+图片不会发送给第三方。OCR 语言数据已随 WebUI 镜像安装，运行时不会下载模型，也无需挂载模型目录。清晰、单一字体的文字区域效果最好；复杂背景、描边阴影、透视、混排及可变字体非默认轴会降低准确度。相似度是启发式排序，不是确定性的字体鉴定。
 
 ## MCP 客户端
 
@@ -118,7 +118,7 @@ node --test tests/test_upload_queue.cjs
 uv run pytest legacy/ingest/test_ingest.py
 ```
 
-更多操作与故障恢复见 [NAS 使用说明](docs/nas-usage.md)和 [fnOS 部署文档](docs/fnos-deployment.md)。
+更多操作与故障恢复见 [NAS 使用说明](docs/nas-usage.md)。
 
 ---
 
