@@ -1,4 +1,4 @@
-ARG PYTHON_IMAGE=public.ecr.aws/docker/library/python:3.12-slim-bookworm
+ARG PYTHON_IMAGE=python:3.12-slim-bookworm
 FROM ${PYTHON_IMAGE}
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 \
     FONT_MANAGER_ROOT=/fonts FONT_MANAGER_STATE=/state \

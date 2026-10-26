@@ -11,7 +11,7 @@
 | 旧 worker 状态 | `/vol3/docker/font-inbox/state` |
 | 旧项目代码 | `/path/to/Fonts/_自动入库` |
 
-新 `font-ingest` 服务使用 `legacy/ingest` 作为构建上下文，镜像为 `ghcr.io/4nest/local-fonts-manager-ingest:latest`，容器为 `local-fonts-manager-ingest`。WebUI / MCP 镜像为 `ghcr.io/4nest/local-fonts-manager:latest`。GitHub Actions 发布 linux/amd64 与 linux/arm64 多架构镜像，NAS 无需本地编译。原 Dockerfile 的基础镜像 digest、`fonttools==4.62.1`、`Pillow==11.3.0`、配置和启动命令均保留。容器内字体根为 `/fonts`，状态目录为 `/state`；检查间隔仍为 15 秒，复制稳定等待仍为 60 秒。
+新 `font-ingest` 服务使用 `legacy/ingest` 作为构建上下文，镜像为 `ghcr.io/4nest/local-fonts-manager-ingest:latest`，容器为 `local-fonts-manager-ingest`。WebUI / MCP 镜像为 `ghcr.io/4nest/local-fonts-manager:latest`。GitHub Actions 发布 linux/amd64 与 linux/arm64 多架构镜像，NAS 无需本地编译。Python 3.12 slim 基础镜像、`fonttools==4.62.1`、`Pillow==11.3.0`、配置和启动命令均保留。容器内字体根为 `/fonts`，状态目录为 `/state`；检查间隔仍为 15 秒，复制稳定等待仍为 60 秒。
 
 ## 首次切换
 

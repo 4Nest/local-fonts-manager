@@ -69,7 +69,7 @@ sudo docker compose logs --tail=100 font-ingest
 sudo docker compose exec -T font-ingest python /app/font_ingest.py status --config /app/config.json --state /state
 ```
 
-项目程序位于 `/vol3/docker/local-fonts-manager/app`，入库源代码与配置位于其中的 `legacy/ingest/`。`legacy/ingest/config.nas.json` 定义分类区路径、检查间隔和稳定等待时间。修改入库代码或配置后，在项目目录执行 `sudo docker compose up -d --build font-ingest` 重建 worker。原有依赖版本和入库行为保留；基础镜像来自 Amazon ECR 的 Docker Official Images 镜像源。
+项目程序位于 `/vol3/docker/local-fonts-manager/app`，入库源代码与配置位于其中的 `legacy/ingest/`。`legacy/ingest/config.nas.json` 定义分类区路径、检查间隔和稳定等待时间。修改入库代码或配置后，在项目目录执行 `sudo docker compose up -d --build font-ingest` 重建 worker。原有依赖版本和入库行为保留；基础镜像来自 Docker Hub 的 Docker Official Images。
 
 字体库通过 `.env` 中的 `FONT_LIBRARY_PATH` 挂载到容器内 `/fonts`。默认运行账户为 `1000:1001`，请按字体库所属用户调整。入库容器只挂载字体目录和自己的状态目录，没有开放网络端口；WebUI / MCP 由独立管理器容器提供，使用 8765 端口。
 
