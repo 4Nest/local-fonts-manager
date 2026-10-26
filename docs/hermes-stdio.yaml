@@ -1,0 +1,15 @@
+# 同机使用时可选；无需先启动 WebUI。按实际位置修改 uv、项目和字体目录。
+mcp_servers:
+  fonts:
+    command: "/usr/local/bin/uv"
+    args:
+      - run
+      - --directory
+      - /opt/local-fonts-manager
+      - fonts-manager
+      - mcp
+      - --root
+      - /path/to/Fonts
+      - --state
+      - /opt/local-fonts-manager/.state
+

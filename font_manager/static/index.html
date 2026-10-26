@@ -1,0 +1,395 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f4f6fb" />
+    <title>字库 · Local Fonts Manager</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%233e59ac'/%3E%3Ctext x='10' y='48' font-size='44' fill='white'%3E字%3C/text%3E%3C/svg%3E"
+    />
+    <link rel="stylesheet" href="/assets/style.css" />
+    <script src="/assets/upload-queue.js" defer></script>
+    <script src="/assets/recognition.js" defer></script>
+    <script src="/assets/app.js" defer></script>
+  </head>
+  <body>
+    <svg class="sprite" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <symbol id="i-grid" viewBox="0 0 24 24">
+          <rect x="3" y="3" width="7" height="7" rx="1.5" />
+          <rect x="14" y="3" width="7" height="7" rx="1.5" />
+          <rect x="3" y="14" width="7" height="7" rx="1.5" />
+          <rect x="14" y="14" width="7" height="7" rx="1.5" />
+        </symbol>
+        <symbol id="i-star" viewBox="0 0 24 24">
+          <path
+            d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9Z"
+          />
+        </symbol>
+        <symbol id="i-folder" viewBox="0 0 24 24">
+          <path
+            d="M3 7V5a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"
+          />
+        </symbol>
+        <symbol id="i-search" viewBox="0 0 24 24">
+          <circle cx="10.5" cy="10.5" r="6.5" />
+          <path d="m16 16 5 5" />
+        </symbol>
+        <symbol id="i-upload" viewBox="0 0 24 24">
+          <path d="M12 16V3m-5 5 5-5 5 5M4 15v5h16v-5" />
+        </symbol>
+        <symbol id="i-refresh" viewBox="0 0 24 24">
+          <path d="M20 9a8 8 0 1 0 0 6M20 3v6h-6" />
+        </symbol>
+        <symbol id="i-plus" viewBox="0 0 24 24">
+          <path d="M12 5v14M5 12h14" />
+        </symbol>
+        <symbol id="i-list" viewBox="0 0 24 24">
+          <path d="M8 5h13M8 12h13M8 19h13M3 5h.01M3 12h.01M3 19h.01" />
+        </symbol>
+        <symbol id="i-close" viewBox="0 0 24 24">
+          <path d="m6 6 12 12M18 6 6 18" />
+        </symbol>
+        <symbol id="i-link" viewBox="0 0 24 24">
+          <path
+            d="m10 13 4-4m-6 7-2 2a4 4 0 0 1-6-6l5-5a4 4 0 0 1 6 0m2 3 2-2a4 4 0 0 1 6 6l-5 5a4 4 0 0 1-6 0"
+            transform="translate(2 0)"
+          />
+        </symbol>
+        <symbol id="i-check" viewBox="0 0 24 24">
+          <path d="m5 12 4 4L19 6" />
+        </symbol>
+        <symbol id="i-download" viewBox="0 0 24 24">
+          <path d="M12 3v13m-5-5 5 5 5-5M4 17v4h16v-4" />
+        </symbol>
+        <symbol id="i-compare" viewBox="0 0 24 24">
+          <path d="M3 4h7v16H3zM14 4h7v16h-7z" />
+        </symbol>
+        <symbol id="i-settings" viewBox="0 0 24 24">
+          <path d="M4 6h16M4 12h16M4 18h16" />
+          <circle cx="8" cy="6" r="2" />
+          <circle cx="16" cy="12" r="2" />
+          <circle cx="10" cy="18" r="2" />
+        </symbol>
+      </defs>
+    </svg>
+    <aside class="sidebar" id="sidebar">
+      <a class="brand" href="/"
+        ><span class="brand-mark">字</span
+        ><span>字库<small>Local Fonts Manager</small></span></a
+      >
+      <div class="nav-caption">我的字体库</div>
+      <nav id="main-nav">
+        <button class="nav-item active" data-view="all">
+          <svg><use href="#i-grid" /></svg>全部字体<span
+            id="total-count"
+            class="nav-count"
+            >—</span
+          >
+        </button>
+        <button class="nav-item" data-view="favorites">
+          <svg><use href="#i-star" /></svg>我的收藏<span
+            id="favorite-count"
+            class="nav-count"
+            >0</span
+          >
+        </button>
+        <button class="nav-item" id="recognition-button">
+          <svg><use href="#i-search" /></svg>图片识别
+        </button>
+      </nav>
+      <div class="nav-caption with-action">
+        选集<button
+          id="add-collection"
+          class="icon-button"
+          aria-label="新建选集"
+        >
+          <svg><use href="#i-plus" /></svg>
+        </button>
+      </div>
+      <nav id="collections-nav"></nav>
+      <div class="nav-caption">按语言浏览</div>
+      <nav id="language-nav"></nav>
+      <div class="sidebar-bottom">
+        <button id="settings-button" class="nav-item">
+          <svg><use href="#i-settings" /></svg>设置
+        </button>
+        <div class="connection">
+          <span class="status-dot" id="nas-dot"></span
+          ><span id="nas-status">正在连接字体库</span>
+        </div>
+        <div class="root-path" id="root-path" title="字体根目录"></div>
+      </div>
+    </aside>
+    <main id="library-page">
+      <header class="page-header">
+        <div>
+          <div class="breadcrumb">
+            我的字体库 <span>/</span> <span id="breadcrumb-name">全部字体</span>
+          </div>
+          <h1 id="page-title">全部字体 <span id="heading-count">—</span></h1>
+          <p id="page-description">为下一段文字，找到恰好的字形。</p>
+        </div>
+        <div class="header-actions">
+          <button class="button" id="inbox-button">
+            <svg><use href="#i-folder" /></svg>入库动态</button
+          ><button class="button primary" id="upload-button">
+            <svg><use href="#i-upload" /></svg>添加字体
+          </button>
+        </div>
+      </header>
+      <section class="preview-controls" aria-label="试字设置">
+        <div class="preview-input-row">
+          <span class="preview-label">试一段文字</span
+          ><textarea
+            id="preview-text"
+            rows="1"
+            maxlength="300"
+            aria-label="试字文本"
+            placeholder="输入你想预览的文字"
+          >
+山海之间，自有回响。</textarea
+          ><button
+            id="reset-preview"
+            class="icon-button"
+            title="重置试字"
+            aria-label="重置试字"
+          >
+            <svg><use href="#i-refresh" /></svg>
+          </button>
+        </div>
+        <div class="preview-options">
+          <div class="presets">
+            <button class="preset active" data-sample="auto">自动</button
+            ><button class="preset" data-sample="zh">中文</button
+            ><button class="preset" data-sample="en">English</button
+            ><button class="preset" data-sample="ja">日本語</button
+            ><button class="preset" data-sample="subtitle">字幕</button>
+          </div>
+          <div class="type-options">
+            <span class="range-label">字号</span
+            ><input
+              id="font-size"
+              type="range"
+              min="18"
+              max="80"
+              value="36"
+              aria-label="预览字号"
+            /><output id="font-size-value">36 px</output
+            ><span class="control-divider"></span
+            ><button
+              class="swatch light active"
+              id="light-preview"
+              aria-label="白底预览"
+              title="白底预览"
+            ></button
+            ><button
+              class="swatch dark"
+              id="dark-preview"
+              aria-label="深底预览"
+              title="深底预览"
+            ></button>
+          </div>
+        </div>
+      </section>
+      <section class="filter-bar" aria-label="字体筛选">
+        <label class="search-field"
+          ><svg><use href="#i-search" /></svg
+          ><input
+            type="search"
+            id="search"
+            placeholder="搜索字族、文件名、别名…"
+            aria-label="搜索字体"
+          /><kbd>/</kbd></label
+        ><select id="vendor-filter" aria-label="厂商">
+          <option value="">全部厂商</option></select
+        ><select id="language-filter" aria-label="语言">
+          <option value="">全部语言</option></select
+        ><select id="format-filter" aria-label="格式">
+          <option value="">全部格式</option></select
+        ><button
+          class="icon-button"
+          id="clear-filters"
+          title="清除筛选"
+          aria-label="清除筛选"
+        >
+          <svg><use href="#i-refresh" /></svg>
+        </button>
+      </section>
+      <div class="organization-filters">
+        <select id="collection-filter" aria-label="选集筛选">
+          <option value="">全部选集</option></select
+        ><button id="mobile-new-collection" class="text-button">新建选集</button
+        ><select id="tag-filter" aria-label="标签筛选">
+          <option value="">全部标签</option></select
+        ><button id="manage-collection" class="text-button" hidden>
+          选集设置
+        </button>
+      </div>
+      <div class="results-bar">
+        <div>
+          <span id="results-count">正在读取字体目录…</span
+          ><span id="active-filter"></span>
+        </div>
+        <div class="result-actions">
+          <button class="text-button" id="select-page">选择本页</button
+          ><button class="text-button" id="refresh-button">
+            <svg><use href="#i-refresh" /></svg>刷新目录
+          </button>
+          <div class="view-switch">
+            <button
+              class="icon-button active"
+              id="grid-view"
+              aria-label="卡片视图"
+            >
+              <svg><use href="#i-grid" /></svg></button
+            ><button class="icon-button" id="list-view" aria-label="列表视图">
+              <svg><use href="#i-list" /></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div id="error-banner" class="error-banner" hidden role="alert"></div>
+      <section id="font-grid" class="font-grid" aria-label="字体预览"></section>
+      <div id="empty-state" class="empty-state" hidden>
+        <div class="empty-symbol">字</div>
+        <h2>没有找到匹配的字体</h2>
+        <p>换个关键词，或调整厂商、语言与格式筛选。</p>
+        <button class="button" id="empty-reset">清除筛选</button>
+      </div>
+      <footer class="pagination">
+        <span id="page-info"></span>
+        <div>
+          <button id="prev-page" class="button" disabled>上一页</button
+          ><span id="page-number">1</span
+          ><button id="next-page" class="button" disabled>下一页</button>
+        </div>
+      </footer>
+      <div class="workspace-footer">
+        <span id="index-info">本地索引 · 字体保留在 NAS</span
+        ><a href="/api/export" download>导出整理记录</a>
+      </div>
+    </main>
+    <main id="settings-page" hidden>
+      <header class="page-header">
+        <div>
+          <div class="breadcrumb">字库 <span>/</span> 设置</div>
+          <h1>设置</h1>
+          <p>管理外部连接与字体库信息。</p>
+        </div>
+        <button id="back-to-library" class="button">返回字库</button>
+      </header>
+      <section class="settings-panel" aria-labelledby="token-heading">
+        <h2 id="token-heading">API Token</h2>
+        <p class="settings-description">
+          MCP 客户端连接时使用。字体库网页可直接打开。
+        </p>
+        <form id="api-token-form">
+          <label for="api-token" class="field-label">当前 Token</label>
+          <div class="token-input-row">
+            <input
+              id="api-token"
+              class="field"
+              type="password"
+              minlength="16"
+              maxlength="256"
+              autocomplete="off"
+              spellcheck="false"
+              required
+              aria-describedby="token-help"
+            /><button
+              type="button"
+              id="toggle-token"
+              class="button"
+              aria-pressed="false"
+            >
+              显示</button
+            ><button type="button" id="copy-token" class="button">复制</button>
+          </div>
+          <p id="token-help" class="small-note">
+            可填写 16–256 位英文、数字或符号。保存或重置后，旧 Token 立即失效。
+          </p>
+          <div class="token-actions">
+            <button type="submit" class="button primary" id="save-token">
+              保存 Token</button
+            ><button type="button" class="button" id="reset-token">
+              重置 Token</button
+            ><span id="token-status" class="small-note" role="status"></span>
+          </div>
+        </form>
+      </section>
+      <section class="settings-panel" aria-labelledby="mcp-heading">
+        <h2 id="mcp-heading">MCP 客户端接入</h2>
+        <p class="settings-description">
+          适用于支持 Streamable HTTP 的 MCP 客户端。使用下面的地址连接字体库，并将 API Token 填入客户端的 Bearer 认证配置。
+        </p>
+        <label class="field-label" for="mcp-endpoint">MCP 地址</label>
+        <div class="token-input-row">
+          <input id="mcp-endpoint" class="field" readonly /><button
+            id="copy-endpoint"
+            class="button"
+          >
+            复制地址
+          </button>
+        </div>
+        <div class="token-actions">
+          <button id="settings-mcp-config" class="button">
+            查看连接配置
+          </button>
+        </div>
+      </section>
+      <section class="settings-panel">
+        <h2>字体库</h2>
+        <p id="settings-root" class="detail-path"></p>
+        <p class="small-note">
+          API Token
+          与收藏、标签、选集一起保存在持久化状态目录中，重启后继续有效。
+        </p>
+      </section>
+    </main>
+    <div id="selection-bar" class="selection-bar" hidden>
+      <span>已选 <strong id="selection-count">0</strong> 款</span
+      ><button id="compare-button" class="button">
+        <svg><use href="#i-compare" /></svg>对比字形</button
+      ><button id="batch-favorite" class="button">
+        <svg><use href="#i-star" /></svg>收藏</button
+      ><button id="batch-organize" class="button primary">整理到选集</button
+      ><button id="clear-selection" class="icon-button" aria-label="取消选择">
+        <svg><use href="#i-close" /></svg>
+      </button>
+    </div>
+    <div id="drawer-overlay" class="drawer-overlay" hidden></div>
+    <aside
+      id="detail-drawer"
+      class="detail-drawer"
+      role="dialog"
+      aria-modal="true"
+      aria-label="字体详情"
+      hidden
+    >
+      <div class="drawer-header">
+        <span>字体详情</span
+        ><button
+          id="close-drawer"
+          class="icon-button"
+          aria-label="关闭字体详情"
+        >
+          <svg><use href="#i-close" /></svg>
+        </button>
+      </div>
+      <div id="detail-content"></div>
+    </aside>
+    <dialog id="modal">
+      <div class="modal-header">
+        <h2 id="modal-title"></h2>
+        <button id="close-modal" class="icon-button" aria-label="关闭弹窗">
+          <svg><use href="#i-close" /></svg>
+        </button>
+      </div>
+      <div id="modal-content"></div>
+    </dialog>
+    <div id="toast" class="toast" role="status" hidden></div>
+  </body>
+</html>

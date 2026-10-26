@@ -1,0 +1,15 @@
+{
+  "root": "/fonts",
+  "inbox": "待入库",
+  "library": "完整包",
+  "duplicates": "_入库重复备份",
+  "review": "_入库待检查",
+  "attachments": "附件与原有脚本/自动入库附件",
+  "poll_seconds": 15,
+  "stable_seconds": 60,
+  "retry_seconds": 60,
+  "update_main_catalog": true,
+  "smb_attributes": true,
+  "host_path": "/path/to/Fonts",
+  "share_path": "\\\\NAS\\Fonts"
+}

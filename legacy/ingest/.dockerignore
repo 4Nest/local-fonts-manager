@@ -1,0 +1,9 @@
+*
+!Dockerfile
+!font_ingest.py
+!classification.py
+!metadata.py
+!health.py
+!test_ingest.py
+!参考站目录.txt
+!config.nas.json

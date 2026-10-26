@@ -1,0 +1,8 @@
+# 合并到 Hermes 的 ~/.hermes/config.yaml；把 nas.local 换成 NAS 的 IP / 域名。
+# 在 Hermes 的 ~/.hermes/.env 中设置 FONT_MANAGER_API_TOKEN，值从 WebUI 设置页面复制。
+mcp_servers:
+  fonts:
+    url: "http://nas.local:8765/mcp"
+    headers:
+      Authorization: "Bearer ${FONT_MANAGER_API_TOKEN}"
+

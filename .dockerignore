@@ -1,0 +1,8 @@
+*
+!pyproject.toml
+!uv.lock
+!font_manager/
+!font_manager/**
+**/__pycache__/
+**/*.pyc
+
