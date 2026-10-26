@@ -66,14 +66,14 @@ sudo docker compose stop font-ingest
 sudo docker compose start font-ingest
 sudo docker compose restart font-ingest
 sudo docker compose logs --tail=100 font-ingest
-sudo docker compose exec -T font-ingest python /app/font_ingest.py status --config /app/config.json --state /state
+sudo docker compose exec -T font-ingest python /app/font_ingest.py status --config /app/config.json
 ```
 
 项目程序位于 `/vol3/docker/local-fonts-manager/app`，入库源代码与配置位于其中的 `legacy/ingest/`。`legacy/ingest/config.nas.json` 定义分类区路径、检查间隔和稳定等待时间。修改入库代码或配置后，在项目目录执行 `sudo docker compose up -d --build font-ingest` 重建 worker。原有依赖版本和入库行为保留；基础镜像来自 Docker Hub 的 Docker Official Images。
 
 字体库通过 `.env` 中的 `FONT_LIBRARY_PATH` 挂载到容器内 `/fonts`。默认运行账户为 `1000:1001`，请按字体库所属用户调整。入库容器只挂载字体目录和自己的状态目录，没有开放网络端口；WebUI / MCP 由独立管理器容器提供，使用 8765 端口。
 
-共享目录 `_自动入库` 现在用于**运行记录与旧代码存档**。其中的 `运行状态.json`、`入库记录/` 和 `worker.lock` 继续由新 worker 使用，旧 Python 文件、旧 Compose 配置及历史恢复脚本作为存档保留。不要在该目录运行旧 `docker compose up`，不要启动旧 `font-inbox` 容器，也不要直接执行历史一次性整理脚本。
+共享目录 `_自动入库` 用于运行记录。其中的 `运行状态.json`、`入库记录/` 和 `worker.lock` 由当前 worker 使用；`worker.lock` 防止多个入库进程同时写入同一字库，不要通过删除锁文件绕过互斥保护。
 
 ## 状态、写锁与恢复
 
@@ -86,5 +86,3 @@ sudo docker compose exec -T font-ingest python /app/font_ingest.py status --conf
 worker 在共享目录 `_自动入库/worker.lock` 上持有操作系统文件锁，防止同一字库同时运行多个入库进程。锁文件存在本身不表示 worker 正在运行；不要通过删除锁文件来绕过锁，也不要同时运行新旧服务。切换时必须先停止当前 worker，迁移完整状态，再启动另一个 worker。
 
 WebUI / MCP 的索引、收藏、标签、备注和选集另存于 `/vol3/docker/local-fonts-manager/state/`，不能与入库状态目录混用。备份整个字体目录前，应在项目目录执行 `sudo docker compose stop`，同时备份字体目录、上述两个完整状态目录，再执行 `sudo docker compose start`。SQLite 的日志文件也属于状态备份；不要只复制主数据库，不要在仍有未完成批次时删除或重建入库数据库。
-
-旧服务的 `/vol3/docker/font-inbox/state/` 是切换时保留的旧状态。新 worker 开始处理后，旧数据库可能已落后于实际字库。回滚必须先停止新 worker，再把当前完整 `ingest-state` 同步回旧状态路径，然后启动旧服务。不能直接启动旧容器或仅恢复旧数据库。详细步骤见项目内 `/vol3/docker/local-fonts-manager/app/docs/fnos-deployment.md`。

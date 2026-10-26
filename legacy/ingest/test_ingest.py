@@ -38,7 +38,7 @@ def make_font(path, family='Inbox Test', revision=1):
 
 class IngestTests(unittest.TestCase):
     def setUp(self):
-        self.tmp=tempfile.TemporaryDirectory(prefix='font-inbox-test-')
+        self.tmp=tempfile.TemporaryDirectory(prefix='font-ingest-test-')
         self.root=Path(self.tmp.name)/'Fonts';self.root.mkdir()
         self.cfg={'root':str(self.root),'inbox':'待入库','library':'完整包','duplicates':'_入库重复备份',
                   'review':'_入库待检查','attachments':'附件与原有脚本/自动入库附件','stable_seconds':60,'poll_seconds':1,'retry_seconds':1,

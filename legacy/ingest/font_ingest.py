@@ -1,4 +1,4 @@
-"""Font inbox for fnOS/Linux or Windows. Exact deduplication and durable moves.
+"""Font ingest for fnOS/Linux or Windows. Exact deduplication and durable moves.
 
 Single writer lock lives on the share; SQLite lives on the worker host, not on SMB.
 Input files are never deleted. A read lease prevents processing an open writer.
@@ -722,7 +722,7 @@ def main():
     parser.add_argument('--state',type=Path)
     args=parser.parse_args()
     config=json.loads(args.config.read_text('utf-8-sig'))
-    state=args.state or Path(os.environ.get('FONT_INBOX_STATE',os.environ.get('LOCALAPPDATA','/state')))/'FontInbox'/hashlib.sha256(config['root'].casefold().encode()).hexdigest()[:12]
+    state=args.state or Path(os.environ.get('FONT_INGEST_STATE',os.environ.get('LOCALAPPDATA','/state')))/'FontIngest'/hashlib.sha256(config['root'].casefold().encode()).hexdigest()[:12]
     state.mkdir(parents=True,exist_ok=True)
     if args.command=='stop':
         (state/'stop.request').write_text(timestamp(),encoding='utf-8')

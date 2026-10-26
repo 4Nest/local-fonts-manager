@@ -30,7 +30,7 @@
 镜像由 GitHub Actions 自动测试并发布，支持 **linux/amd64** 与 **linux/arm64**，NAS 无需编译。
 
 > [!IMPORTANT]
-> 如果正在运行旧 `font-inbox`，请先阅读 [fnOS 切换与回滚说明](docs/fnos-deployment.md)，迁移完整状态后再启动新 worker。两个 worker 不能同时处理同一字库。
+> 部署前请确认没有其他入库 worker 指向同一字库。路径迁移、状态备份与升级步骤见 [fnOS 部署说明](docs/fnos-deployment.md)。
 
 ```bash
 git clone https://github.com/4Nest/local-fonts-manager.git

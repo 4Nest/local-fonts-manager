@@ -45,7 +45,7 @@ services:
     security_opt: [no-new-privileges:true]
     environment:
       TZ: Asia/Shanghai
-      FONT_INBOX_STATE: /state
+      FONT_INGEST_STATE: /state
     volumes:
       - ${FONT_LIBRARY_PATH:-/path/to/Fonts}:/fonts
       - ${FONT_INGEST_STATE_PATH:-/vol3/docker/local-fonts-manager/ingest-state}:/state
